@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Playground - LLM Comparison Tool</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Prompt Playground</h1>
+            <p class="subtitle">Compare prompts across multiple LLM providers</p>
+        </header>
+
+        <main>
+            <!-- Template Selection -->
+            <section class="template-section">
+                <h2>1. Choose a Template</h2>
+                <div class="template-controls">
+                    <div class="form-group">
+                        <label for="templateCategory">Category:</label>
+                        <select id="templateCategory">
+                            <option value="">All Categories</option>
+                            <option value="coding">Coding</option>
+                            <option value="creative">Creative Writing</option>
+                            <option value="analysis">Analysis</option>
+                            <option value="business">Business</option>
+                            <option value="education">Education</option>
+                            <option value="research">Research</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="templateList" class="template-list"></div>
+            </section>
+
+            <!-- Prompt Configuration -->
+            <section class="prompt-section">
+                <h2>2. Configure Your Prompt</h2>
+                <div id="templateDetails" class="template-details hidden">
+                    <div class="template-header">
+                        <h3 id="templateName"></h3>
+                        <span id="templateCategoryBadge" class="category-badge"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label>System Prompt:</label>
+                        <textarea id="systemPrompt" rows="3" readonly></textarea>
+                    </div>
+
+                    <div id="variableInputs" class="variable-inputs"></div>
+
+                    <div class="form-group">
+                        <label>Final Prompt:</label>
+                        <textarea id="finalPrompt" rows="4" readonly></textarea>
+                    </div>
+                </div>
+
+                <div class="custom-prompt">
+                    <h3>Or use a custom prompt:</h3>
+                    <div class="form-group">
+                        <label for="customPrompt">Custom Prompt:</label>
+                        <textarea id="customPrompt" rows="4" placeholder="Enter your custom prompt here..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="customSystemPrompt">Custom System Prompt (optional):</label>
+                        <textarea id="customSystemPrompt" rows="2" placeholder="Optional system prompt..."></textarea>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Provider Selection -->
+            <section class="provider-section">
+                <h2>3. Select Providers</h2>
+                <div class="provider-grid">
+                    <label class="provider-card">
+                        <input type="checkbox" name="provider" value="openai" checked>
+                        <div class="provider-info">
+                            <span class="provider-name">GPT-4</span>
+                            <span class="provider-cost">$0.03/$0.06 per 1K tokens</span>
+                        </div>
+                    </label>
+                    <label class="provider-card">
+                        <input type="checkbox" name="provider" value="anthropic" checked>
+                        <div class="provider-info">
+                            <span class="provider-name">Claude 3.5 Sonnet</span>
+                            <span class="provider-cost">$0.003/$0.015 per 1K tokens</span>
+                        </div>
+                    </label>
+                    <label class="provider-card">
+                        <input type="checkbox" name="provider" value="openai-gpt35">
+                        <div class="provider-info">
+                            <span class="provider-name">GPT-3.5 Turbo</span>
+                            <span class="provider-cost">$0.0005/$0.0015 per 1K tokens</span>
+                        </div>
+                    </label>
+                </div>
+
+                <div class="model-options">
+                    <div class="form-group">
+                        <label for="temperature">Temperature: <span id="temperatureValue">0.7</span></label>
+                        <input type="range" id="temperature" min="0" max="1" step="0.1" value="0.7">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxTokens">Max Tokens:</label>
+                        <input type="number" id="maxTokens" value="1000" min="100" max="4000" step="100">
+                    </div>
+                </div>
+
+                <button id="compareBtn" class="btn-primary">🚀 Compare Providers</button>
+            </section>
+
+            <!-- Results -->
+            <section id="resultsSection" class="results-section hidden">
+                <h2>📊 Comparison Results</h2>
+
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="summary-label">Fastest</div>
+                        <div id="fastestProvider" class="summary-value">-</div>
+                        <div id="fastestTime" class="summary-detail">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Cheapest</div>
+                        <div id="cheapestProvider" class="summary-value">-</div>
+                        <div id="cheapestCost" class="summary-detail">-</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-label">Total Cost</div>
+                        <div id="totalCost" class="summary-value">-</div>
+                        <div id="totalTokens" class="summary-detail">-</div>
+                    </div>
+                </div>
+
+                <div id="comparisonGrid" class="comparison-grid"></div>
+            </section>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-state hidden">
+                <div class="spinner"></div>
+                <p>Generating responses from selected providers...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="errorState" class="error-state hidden">
+                <p id="errorMessage"></p>
+            </div>
+        </main>
+
+        <footer>
+            <p>Built with FastAPI + Vanilla JS | <a href="/api/docs" target="_blank">API Docs</a></p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -83,7 +83,8 @@ class ProviderResponse(BaseModel):
     response: str
     latency: float
     cost: float
-    tokens: Dict[str, int]
+    input_tokens: int
+    output_tokens: int
     error: Optional[str] = None
 
 
@@ -266,11 +267,8 @@ async def compare_prompts(request: Request, compare_request: CompareRequest):
                 response=response_text,
                 latency=latency,
                 cost=cost,
-                tokens={
-                    "input": input_tokens,
-                    "output": output_tokens,
-                    "total": input_tokens + output_tokens,
-                },
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
             ))
 
         except Exception as e:
@@ -283,7 +281,8 @@ async def compare_prompts(request: Request, compare_request: CompareRequest):
                 response="",
                 latency=time.time() - provider_start,
                 cost=0.0,
-                tokens={"input": 0, "output": 0, "total": 0},
+                input_tokens=0,
+                output_tokens=0,
                 error=str(e),
             ))
 
