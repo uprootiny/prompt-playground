@@ -4,6 +4,12 @@ Tests for Prompt Playground API endpoints
 
 import pytest
 from fastapi.testclient import TestClient
+
+# Import main app
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from main import app
 
 client = TestClient(app)
