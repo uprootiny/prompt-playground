@@ -23,6 +23,7 @@ from metrics import metrics
 from llm.providers import create_provider
 from prompts.templates import TEMPLATES, get_template, render_template, get_all_categories
 from prompts.cost import calculate_cost, get_cost_breakdown, estimate_tokens
+from cache import ResponseCache
 
 # Load environment variables
 load_dotenv()
@@ -63,6 +64,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize response cache
+response_cache = ResponseCache(max_size=1000, ttl_seconds=3600)
+
 
 # Request/Response Models
 
@@ -85,6 +89,7 @@ class ProviderResponse(BaseModel):
     cost: float
     input_tokens: int
     output_tokens: int
+    cached: bool = False
     error: Optional[str] = None
 
 
@@ -235,7 +240,7 @@ async def compare_prompts(request: Request, compare_request: CompareRequest):
             if compare_request.models and provider_name in compare_request.models:
                 model = compare_request.models[provider_name]
 
-            # Create provider
+            # Create provider to get actual model name
             logger.debug(f"Creating provider: {provider_name} (model={model})")
             provider = create_provider(
                 provider_name,
@@ -243,9 +248,34 @@ async def compare_prompts(request: Request, compare_request: CompareRequest):
                 temperature=compare_request.temperature,
                 max_tokens=compare_request.max_tokens,
             )
+            actual_model = provider.get_model_name()
+
+            # Check cache first
+            cached = response_cache.get(
+                prompt=compare_request.prompt,
+                provider=provider_name,
+                model=actual_model,
+                temperature=compare_request.temperature,
+                system_prompt=compare_request.system_prompt,
+            )
+
+            if cached:
+                logger.info(f"Cache hit for {provider_name}/{actual_model}")
+                results.append(ProviderResponse(
+                    provider=provider_name,
+                    model=actual_model,
+                    response=cached.response,
+                    latency=cached.latency,
+                    cost=cached.cost,
+                    input_tokens=cached.input_tokens,
+                    output_tokens=cached.output_tokens,
+                    cached=True,
+                ))
+                # Don't add to total_cost for cached responses
+                continue
 
             # Generate response
-            logger.info(f"Generating with {provider.get_model_name()}")
+            logger.info(f"Generating with {actual_model} (cache miss)")
             response_text = provider.generate(
                 compare_request.prompt,
                 system_prompt=compare_request.system_prompt,
@@ -254,21 +284,36 @@ async def compare_prompts(request: Request, compare_request: CompareRequest):
             latency = time.time() - provider_start
 
             # Estimate tokens and cost
-            input_tokens = estimate_tokens(compare_request.prompt, provider.get_model_name())
-            output_tokens = estimate_tokens(response_text, provider.get_model_name())
-            cost = calculate_cost(provider.get_model_name(), input_tokens, output_tokens)
+            input_tokens = estimate_tokens(compare_request.prompt, actual_model)
+            output_tokens = estimate_tokens(response_text, actual_model)
+            cost = calculate_cost(actual_model, input_tokens, output_tokens)
             total_cost += cost
+
+            # Cache the response
+            response_cache.put(
+                prompt=compare_request.prompt,
+                provider=provider_name,
+                model=actual_model,
+                response=response_text,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                latency=latency,
+                temperature=compare_request.temperature,
+                system_prompt=compare_request.system_prompt,
+            )
 
             logger.debug(f"{provider_name} complete: {latency:.2f}s, ${cost:.4f}")
 
             results.append(ProviderResponse(
                 provider=provider_name,
-                model=provider.get_model_name(),
+                model=actual_model,
                 response=response_text,
                 latency=latency,
                 cost=cost,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                cached=False,
             ))
 
         except Exception as e:
@@ -329,6 +374,19 @@ async def get_pricing():
 async def get_categories():
     """Get all template categories"""
     return get_all_categories()
+
+
+@app.get("/api/cache/stats")
+async def get_cache_stats():
+    """Get cache statistics"""
+    return response_cache.get_stats()
+
+
+@app.post("/api/cache/clear")
+async def clear_cache():
+    """Clear response cache"""
+    response_cache.clear()
+    return {"message": "Cache cleared successfully"}
 
 
 # Serve frontend static files
