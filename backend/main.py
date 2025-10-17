@@ -23,6 +23,7 @@ from metrics import metrics
 from llm.providers import create_provider
 from prompts.templates import TEMPLATES, get_template, render_template, get_all_categories
 from prompts.cost import calculate_cost, get_cost_breakdown, estimate_tokens
+from prompts.optimizer import PromptOptimizer, OptimizationResult
 from cache import ResponseCache
 
 # Load environment variables
@@ -64,8 +65,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize response cache
+# Initialize response cache and optimizer
 response_cache = ResponseCache(max_size=1000, ttl_seconds=3600)
+prompt_optimizer = PromptOptimizer()
 
 
 # Request/Response Models
@@ -115,6 +117,31 @@ class TemplateResponse(BaseModel):
     rendered_prompt: str
     system_prompt: str
     variables: List[str]
+
+
+class OptimizeRequest(BaseModel):
+    """Request to optimize a prompt"""
+    prompt: str
+    model: str = "gpt-4"
+    target_output_length: int = 500
+
+
+class OptimizationIssueResponse(BaseModel):
+    """An optimization issue"""
+    type: str
+    severity: str
+    message: str
+    suggestion: str
+    example: Optional[str] = None
+
+
+class OptimizeResponse(BaseModel):
+    """Optimization analysis result"""
+    score: float
+    issues: List[OptimizationIssueResponse]
+    token_count: int
+    estimated_cost: float
+    optimized_prompt: Optional[str] = None
 
 
 # Endpoints
@@ -387,6 +414,70 @@ async def clear_cache():
     """Clear response cache"""
     response_cache.clear()
     return {"message": "Cache cleared successfully"}
+
+
+@app.post("/api/optimize", response_model=OptimizeResponse)
+async def optimize_prompt(optimize_request: OptimizeRequest):
+    """
+    Analyze prompt and suggest improvements
+
+    Checks for:
+    - Clarity and specificity
+    - Optimal length
+    - Proper structure
+    - Cost optimization opportunities
+    - Tone and formatting
+
+    Returns a score (0-100) and list of specific issues with suggestions.
+
+    Example:
+        {
+            "prompt": "Write something about AI",
+            "model": "gpt-4",
+            "target_output_length": 500
+        }
+
+    Response:
+        {
+            "score": 45.0,
+            "issues": [
+                {
+                    "type": "specificity",
+                    "severity": "medium",
+                    "message": "Prompt uses generic terms",
+                    "suggestion": "Replace generic terms with specific requirements",
+                    "example": "Instead of: 'Write something about AI'\\nTry: 'Write a 200-word explanation of transformer architectures'"
+                }
+            ],
+            "token_count": 15,
+            "estimated_cost": 0.002,
+            "optimized_prompt": "Generate: Write something about AI\\n\\nRequirements:..."
+        }
+    """
+    metrics.increment_request("optimize")
+
+    result = prompt_optimizer.analyze(
+        prompt=optimize_request.prompt,
+        model=optimize_request.model,
+        target_output_length=optimize_request.target_output_length,
+    )
+
+    return OptimizeResponse(
+        score=result.score,
+        issues=[
+            OptimizationIssueResponse(
+                type=issue.type.value,
+                severity=issue.severity.value,
+                message=issue.message,
+                suggestion=issue.suggestion,
+                example=issue.example,
+            )
+            for issue in result.issues
+        ],
+        token_count=result.token_count,
+        estimated_cost=result.estimated_cost,
+        optimized_prompt=result.optimized_prompt,
+    )
 
 
 # Serve frontend static files
